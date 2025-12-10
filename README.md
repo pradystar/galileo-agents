@@ -88,13 +88,13 @@ The following headers are required:
 | Header | Description |
 |--------|-------------|
 | `Galileo-API-Key` | Your Galileo API key |
-| `project` | Project name |
-| `projectid` | Project ID |
-| `logstream` | Logstream name |
-| `logstreamid` | Logstream ID |
+| `project` or `projectid` | Project name or project ID (at least one required) |
+| `logstream` or `logstreamid` | Logstream name or logstream ID (at least one required) |
 | `Content-Type` | Must be `application/x-protobuf` |
 
-You can pass either `project` or `projectid` and `logstream` or `logstreamid`.
+**Project and Logstream Headers:**
+- You must provide at least one of `project` or `projectid` (project name or project ID)
+- You must provide at least one of `logstream` or `logstreamid` (logstream name or logstream ID)
 
 ### Request Body
 
@@ -102,11 +102,18 @@ The request body should contain OTLP packets in protobuf format (binary). The pa
 
 ### Example using Python
 
-See [shared/proto.py](shared/proto.py) for an example. You can run it with:
+See [shared/otel.py](shared/otel.py) for an example. You can run it with:
 
 ```bash
-uv run shared/proto.py
+uv run shared/otel.py --api-key YOUR_KEY --project PROJECT_NAME --logstream LOGSTREAM_NAME
 ```
+
+The script supports the following arguments:
+- `--api-key` (required): Your Galileo API key
+- `--project` or `--projectid` (at least one required): Project name or project ID
+- `--logstream` or `--logstreamid` (at least one required): Logstream name or logstream ID
+- `--url` (optional): API endpoint URL (default: `https://api.galileo.ai/otel/v1/traces`)
+- `--directory` (optional): Directory containing `.bin` trace files (default: `agents-langgraph/weather/otlp_trace`)
 
 ### HTTP Responses
 
