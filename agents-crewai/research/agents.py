@@ -1,26 +1,64 @@
-"""Research crew agents."""
+"""
+Customer Support Agents for TechGadgets Inc.
+
+This module defines the Support Agent and Escalation Specialist agents
+that work together to handle customer inquiries.
+"""
+
 from crewai import Agent
 
-from prompts import ANALYST_BACKSTORY, ANALYST_GOAL, RESEARCHER_BACKSTORY, RESEARCHER_GOAL
+from prompts import (
+    ESCALATION_SPECIALIST_BACKSTORY,
+    ESCALATION_SPECIALIST_GOAL,
+    ESCALATION_SPECIALIST_ROLE,
+    SUPPORT_AGENT_BACKSTORY,
+    SUPPORT_AGENT_GOAL,
+    SUPPORT_AGENT_ROLE,
+)
+from tools import search_faqs, search_policies, search_troubleshooting
 
 
-def create_researcher_agent(llm, tools=None) -> Agent:
+def create_support_agent(llm: str = "gpt-4o-mini") -> Agent:
+    """
+    Create the first-line Support Agent.
+
+    This agent handles initial customer inquiries by searching FAQs
+    and troubleshooting guides.
+
+    Args:
+        llm: The language model to use (default: gpt-4o-mini)
+
+    Returns:
+        Configured Support Agent
+    """
     return Agent(
-        role="Researcher",
-        goal=RESEARCHER_GOAL,
-        backstory=RESEARCHER_BACKSTORY,
+        role=SUPPORT_AGENT_ROLE,
+        goal=SUPPORT_AGENT_GOAL,
+        backstory=SUPPORT_AGENT_BACKSTORY,
+        tools=[search_faqs, search_troubleshooting],
         llm=llm,
-        tools=tools or [],
         verbose=True,
     )
 
 
-def create_analyst_agent(llm, tools=None) -> Agent:
+def create_escalation_specialist(llm: str = "gpt-4o-mini") -> Agent:
+    """
+    Create the Escalation Specialist agent.
+
+    This agent handles complex issues by searching policies and
+    creating comprehensive escalation summaries.
+
+    Args:
+        llm: The language model to use (default: gpt-4o-mini)
+
+    Returns:
+        Configured Escalation Specialist Agent
+    """
     return Agent(
-        role="Analyst",
-        goal=ANALYST_GOAL,
-        backstory=ANALYST_BACKSTORY,
+        role=ESCALATION_SPECIALIST_ROLE,
+        goal=ESCALATION_SPECIALIST_GOAL,
+        backstory=ESCALATION_SPECIALIST_BACKSTORY,
+        tools=[search_policies],
         llm=llm,
-        tools=tools or [],
         verbose=True,
     )
