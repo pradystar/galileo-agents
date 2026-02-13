@@ -131,8 +131,6 @@ For a span to be considered valid, it must include the following **required** at
 
 When using automatic instrumentation libraries (like Traceloop/OpenLLMetry), they typically handle these requirements automatically. However, when creating custom spans, ensure you follow both the OpenTelemetry GenAI conventions and any framework-specific guidelines.
 
-For implementation details on how Galileo processes input/output, refer to the [OTLP provider source code](https://github.com/galileo/api/tree/main/api/services/otel_v2).
-
 ### Error Handling
 
 For spans that end in an error, you **must** include:
@@ -214,6 +212,29 @@ The OTLP endpoint returns the following HTTP status codes:
     }
   }
   ```
+
+  Each error message is prefixed with `"Group <N>: "` indicating which resource span group was affected. Multiple error messages are semicolon-separated.
+
+  **Rejection Scenarios:**
+
+  | Scenario | Error Message | Retryable? | Details |
+  |----------|--------------|------------|---------|
+  | Run not found | `"Run not found"` | No | The associated run or logstream must be created first. |
+  | No GenAI patterns detected | `"No GenAI patterns detected in spans. Ensure spans contain standard OTEL GenAI attributes or are from a supported framework."` | No | Spans must include `gen_ai.*` OTEL attributes or come from a supported framework (Strands, Mastra, CrewAI, PydanticAI, Vercel, Traceloop, OpenInference). |
+  | Missing span ID | `"Missing required field 'id' (span_id): Every span must have a unique identifier"` | No | Structural issue — every span must have a unique identifier. |
+  | Missing trace ID | `"Missing required field 'trace_id': Every span must belong to a trace"` | No | Structural issue — every span must belong to a trace. |
+  | Schema validation failure | `"Galileo schema validation failed for field '<field>': <detail>"` | No | The span doesn't conform to the expected schema. |
+  | Validation model error | `"Validation error converting trace dict to Trace model"` | No | Pydantic validation failure during trace conversion. |
+  | Processor exception | `"Span dropped due to unexpected processor exception."` | Possibly | Could indicate a transient server-side issue. |
+  | Processor failure | `"Span dropped after processor failure."` | No | The span data could not be processed. |
+
+  **Retry Guidance:**
+
+  Almost all rejections are **permanent** — they result from validation failures, missing required fields, or spans that don't match expected GenAI patterns. Retrying the same payload will produce the same result.
+
+  The only potentially transient rejection is `"Span dropped due to unexpected processor exception."`, which may indicate a temporary server-side issue. If encountered, retry with exponential backoff (e.g., 1s, 2s, 4s).
+
+  **Recommendation:** Log the `errorMessage` from any `partialSuccess` response to diagnose and fix rejected spans at the source.
 
 #### Error Responses
 
