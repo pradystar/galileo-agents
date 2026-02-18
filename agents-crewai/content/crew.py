@@ -1,33 +1,13 @@
 """Content Crew - Writer and Editor agents for blog post creation."""
-import os
 import sys
 
 from crewai import Crew, LLM, Task
 from dotenv import load_dotenv
-from opentelemetry import trace
-from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
-from traceloop.sdk import Traceloop
 
 from agents import create_editor_agent, create_writer_agent
 from shared import logger
 
 load_dotenv()
-
-Traceloop.init(
-    app_name="content-crew",
-    resource_attributes={
-        "galileo.project.name": "galileo-agents",
-        "galileo.logstream.name": "content-crew",
-    },
-    disable_batch=True,
-)
-
-# Add console exporter for debugging if enabled
-if os.getenv("TRACELOOP_CONSOLE_EXPORTER_ENABLED", "false").lower() == "true":
-    tracer_provider = trace.get_tracer_provider()
-    if hasattr(tracer_provider, "add_span_processor"):
-        console_processor = BatchSpanProcessor(ConsoleSpanExporter())
-        tracer_provider.add_span_processor(console_processor)
 
 
 def create_crew(topic: str):

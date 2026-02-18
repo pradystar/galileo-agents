@@ -1,33 +1,17 @@
 """Weather Agent - Answers weather questions using tools."""
 
-import os
 import sys
 
 from dotenv import load_dotenv
 from langchain.agents import create_agent
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
-from opentelemetry import trace
-from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 from prompt import WEATHER_AGENT_SYSTEM_PROMPT
 from tools import get_current_weather, get_forecast
-from traceloop.sdk import Traceloop
 
 from shared import logger
 
 load_dotenv()
-
-Traceloop.init(
-    app_name="weather-agent",
-    disable_batch=True,
-)
-
-# Add console exporter for debugging if enabled
-if os.getenv("TRACELOOP_CONSOLE_EXPORTER_ENABLED", "false").lower() == "true":
-    tracer_provider = trace.get_tracer_provider()
-    if hasattr(tracer_provider, "add_span_processor"):
-        console_processor = BatchSpanProcessor(ConsoleSpanExporter())
-        tracer_provider.add_span_processor(console_processor)
 
 
 @tool

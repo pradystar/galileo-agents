@@ -12,36 +12,12 @@ Workflow:
 Usage:
     cd agents-crewai/research
     PYTHONPATH=../.. uv run python crew.py "My device won't turn on and I want a refund"
-
-    # Enable console exporter to see spans:
-    TRACELOOP_CONSOLE_EXPORTER_ENABLED=true PYTHONPATH=../.. uv run python crew.py "My device won't charge"
 """
 
-import os
 import sys
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
-# IMPORTANT: Initialize Traceloop BEFORE importing crewai
-# CrewAI sets up its own TracerProvider during import, which would override
-# our resource_attributes if we initialize Traceloop after the import.
-from traceloop.sdk import Traceloop
-
-Traceloop.init(
-    app_name="customer-support-crew",
-    resource_attributes={
-        "galileo.project.name": "galileo-agents",
-        "galileo.logstream.name": "dev",
-    },
-    disable_batch=True,
-)
-
-# Now import crewai after Traceloop is initialized
 from crewai import Crew, Process, Task
-from opentelemetry import trace
-from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
+from dotenv import load_dotenv
 
 from agents import create_escalation_specialist, create_support_agent
 from prompts import (
@@ -52,12 +28,7 @@ from prompts import (
 )
 from shared import logger
 
-# Add console exporter for debugging if enabled
-if os.getenv("TRACELOOP_CONSOLE_EXPORTER_ENABLED", "false").lower() == "true":
-    tracer_provider = trace.get_tracer_provider()
-    if hasattr(tracer_provider, "add_span_processor"):
-        console_processor = BatchSpanProcessor(ConsoleSpanExporter())
-        tracer_provider.add_span_processor(console_processor)
+load_dotenv()
 
 
 def create_customer_support_crew(query: str) -> Crew:

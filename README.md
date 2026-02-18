@@ -1,6 +1,6 @@
 # Galileo Agents
 
-AI agent examples instrumented with Traceloop (OpenLLMetry), exporting traces to Galileo.
+AI agent examples instrumented with OpenTelemetry zero-code instrumentation, exporting traces to Galileo.
 
 ## Agents
 
@@ -15,11 +15,13 @@ AI agent examples instrumented with Traceloop (OpenLLMetry), exporting traces to
 ## Setup
 
 ```bash
-# Install uv
-curl -LsSf https://astral.sh/uv/install.sh | sh
+# Create and activate virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
 
 # Install dependencies
-uv sync --all-extras
+pip install -r requirements.txt
+pip install -e .
 
 # Configure environment
 cp env.example .env
@@ -28,48 +30,51 @@ cp env.example .env
 
 ## Run
 
+Agents are run via `opentelemetry-instrument` which auto-instruments supported libraries (LangChain, OpenAI, etc.) without any code changes:
+
 ```bash
 # LangGraph
-uv run agents-langgraph/weather/agent.py
-uv run agents-langgraph/calculator/agent.py
-uv run agents-langgraph/rag/agent.py
+opentelemetry-instrument python agents-langgraph/weather/agent.py
+opentelemetry-instrument python agents-langgraph/calculator/agent.py
+opentelemetry-instrument python agents-langgraph/rag/agent.py
 
 # CrewAI
-uv run agents-crewai/content/crew.py
-uv run agents-crewai/research/crew.py
+opentelemetry-instrument python agents-crewai/content/crew.py
+opentelemetry-instrument python agents-crewai/research/crew.py
 
 # Custom queries
-uv run agents-langgraph/weather/agent.py "What's the forecast for NYC?"
+opentelemetry-instrument python agents-langgraph/weather/agent.py "What's the forecast for NYC?"
 ```
 
 ## Environment Variables
 
 | Variable | Description |
 |----------|-------------|
-| `GALILEO_API_KEY` | Galileo API key |
-| `TRACELOOP_BASE_URL` | Traceloop endpoint (default: <https://api.galileo.ai/otel>) |
-| `TRACELOOP_HEADERS` | Traceloop headers: `Galileo-API-Key=${GALILEO_API_KEY}` |
 | `OPENAI_API_KEY` | OpenAI API key |
+| `OTEL_SERVICE_NAME` | Service name for traces (e.g. `weather-agent`) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP endpoint (e.g. `https://api.galileo.ai/otel`) |
+| `OTEL_EXPORTER_OTLP_HEADERS` | OTLP headers (e.g. `Galileo-API-Key=YOUR_KEY`) |
+| `OTEL_RESOURCE_ATTRIBUTES` | Resource attributes (e.g. `galileo.project.name=galileo-agents,galileo.logstream.name=weather-agent`) |
 
 ## Telemetry
 
-All agents use Traceloop for automatic instrumentation. Traceloop reads `TRACELOOP_BASE_URL` and `TRACELOOP_HEADERS` from environment variables and automatically appends `/v1/traces` to the base URL.
+All agents use [OpenTelemetry zero-code instrumentation](https://opentelemetry.io/docs/zero-code/python/). The `opentelemetry-instrument` CLI auto-discovers installed instrumentation packages and instruments supported libraries at startup -- no code changes are needed in the agents themselves.
 
-Project and logstream are specified via resource attributes (hardcoded in each agent):
+Configuration is done entirely via environment variables. For example, in your `.env`:
 
-```python
-from traceloop.sdk import Traceloop
-
-Traceloop.init(
-    app_name="weather-agent",
-    resource_attributes={
-        "galileo.project.name": "galileo-agents",
-        "galileo.logstream.name": "weather-agent",
-    },
-)
+```bash
+OTEL_SERVICE_NAME=weather-agent
+OTEL_EXPORTER_OTLP_ENDPOINT=https://api.galileo.ai/otel
+OTEL_EXPORTER_OTLP_HEADERS=Galileo-API-Key=YOUR_KEY
+OTEL_RESOURCE_ATTRIBUTES=galileo.project.name=galileo-agents,galileo.logstream.name=weather-agent
 ```
 
-Traceloop automatically instruments LangGraph workflows and CrewAI crews, generating spans for agents, tools, LLM calls, and retrievers.
+To add instrumentation for a specific library, install its `opentelemetry-instrumentation-*` package. For example:
+
+```bash
+pip install opentelemetry-instrumentation-openai
+opentelemetry-bootstrap -a install   # auto-install all available instrumentations for installed packages
+```
 
 ## Instrumentation Recommendations
 
@@ -129,7 +134,7 @@ For a span to be considered valid, it must include the following **required** at
 
 **Important**: Each framework may have its own instrumentation guidelines and conventions. Always refer to the framework-specific documentation.
 
-When using automatic instrumentation libraries (like Traceloop/OpenLLMetry), they typically handle these requirements automatically. However, when creating custom spans, ensure you follow both the OpenTelemetry GenAI conventions and any framework-specific guidelines.
+When using OpenTelemetry zero-code instrumentation, these requirements are typically handled automatically. However, when creating custom spans, ensure you follow both the OpenTelemetry GenAI conventions and any framework-specific guidelines.
 
 ### Error Handling
 
@@ -177,7 +182,7 @@ The request body should contain OTLP packets in protobuf format (binary). The pa
 See [shared/otel.py](shared/otel.py) for an example. You can run it with:
 
 ```bash
-uv run shared/otel.py --api-key YOUR_KEY --project PROJECT_NAME --logstream LOGSTREAM_NAME
+python shared/otel.py --api-key YOUR_KEY --project PROJECT_NAME --logstream LOGSTREAM_NAME
 ```
 
 The script supports the following arguments:
@@ -220,7 +225,7 @@ The OTLP endpoint returns the following HTTP status codes:
   | Scenario | Error Message | Retryable? | Details |
   |----------|--------------|------------|---------|
   | Run not found | `"Run not found"` | No | The associated run or logstream must be created first. |
-  | No GenAI patterns detected | `"No GenAI patterns detected in spans. Ensure spans contain standard OTEL GenAI attributes or are from a supported framework."` | No | Spans must include `gen_ai.*` OTEL attributes or come from a supported framework (Strands, Mastra, CrewAI, PydanticAI, Vercel, Traceloop, OpenInference). |
+  | No GenAI patterns detected | `"No GenAI patterns detected in spans. Ensure spans contain standard OTEL GenAI attributes or are from a supported framework."` | No | Spans must include `gen_ai.*` OTEL attributes or come from a supported framework (Strands, Mastra, CrewAI, PydanticAI, Vercel, OpenInference). |
   | Missing span ID | `"Missing required field 'id' (span_id): Every span must have a unique identifier"` | No | Structural issue — every span must have a unique identifier. |
   | Missing trace ID | `"Missing required field 'trace_id': Every span must belong to a trace"` | No | Structural issue — every span must belong to a trace. |
   | Schema validation failure | `"Galileo schema validation failed for field '<field>': <detail>"` | No | The span doesn't conform to the expected schema. |

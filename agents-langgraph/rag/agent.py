@@ -1,42 +1,16 @@
 """RAG Agent - Q&A over documents with vector search."""
-import os
 import sys
 
 from dotenv import load_dotenv
-
-load_dotenv()
-
-# IMPORTANT: Initialize Traceloop BEFORE importing langchain libraries
-# LangChain may set up its own TracerProvider during import, which would override
-# our resource_attributes if we initialize Traceloop after the import.
-from traceloop.sdk import Traceloop
-
-Traceloop.init(
-    app_name="rag-agent",
-    resource_attributes={
-        "galileo.project.name": "galileo-agents",
-        "galileo.logstream.name": "rag-agent",
-    },
-    disable_batch=True,
-)
-
-# Now import langchain after Traceloop is initialized
 from langchain.agents import create_agent
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from opentelemetry import trace
-from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 
 from prompt import RAG_AGENT_SYSTEM_PROMPT, SAMPLE_DOCUMENTS
 from shared import logger
 from tools import create_knowledge_base, search_documents
 
-# Add console exporter for debugging if enabled
-if os.getenv("TRACELOOP_CONSOLE_EXPORTER_ENABLED", "false").lower() == "true":
-    tracer_provider = trace.get_tracer_provider()
-    if hasattr(tracer_provider, "add_span_processor"):
-        console_processor = BatchSpanProcessor(ConsoleSpanExporter())
-        tracer_provider.add_span_processor(console_processor)
+load_dotenv()
 
 # Knowledge base setup
 embeddings = OpenAIEmbeddings(model="text-embedding-3-small")

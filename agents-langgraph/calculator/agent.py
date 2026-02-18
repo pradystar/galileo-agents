@@ -1,36 +1,25 @@
-"""Calculator Agent - Performs calculations and unit conversions."""
-import os
+"""Calculator Agent - Two-level graph: outer workflow wraps inner agent."""
 import sys
+from typing import Annotated
 
 from dotenv import load_dotenv
+
+load_dotenv()  # must be before setup_telemetry so env vars are available
+
 from langchain.agents import create_agent
+from langchain_core.messages import AnyMessage, HumanMessage
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
-from opentelemetry import trace
-from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
-from traceloop.sdk import Traceloop
+from langgraph.graph import StateGraph, START, END
+from langgraph.graph.message import add_messages
+from typing_extensions import TypedDict
 
 from prompt import CALCULATOR_AGENT_SYSTEM_PROMPT
 from shared import logger
+from shared.telemetry import setup_telemetry
 from tools import calculate, convert_units
 
-load_dotenv()
-
-Traceloop.init(
-    app_name="calculator-agent",
-    resource_attributes={
-        "galileo.project.name": "galileo-agents",
-        "galileo.logstream.name": "calculator-agent",
-    },
-    disable_batch=True,
-)
-
-# Add console exporter for debugging if enabled
-if os.getenv("TRACELOOP_CONSOLE_EXPORTER_ENABLED", "false").lower() == "true":
-    tracer_provider = trace.get_tracer_provider()
-    if hasattr(tracer_provider, "add_span_processor"):
-        console_processor = BatchSpanProcessor(ConsoleSpanExporter())
-        tracer_provider.add_span_processor(console_processor)
+setup_telemetry()
 
 
 @tool
@@ -53,13 +42,38 @@ def convert_tool(value: float, from_unit: str, to_unit: str) -> str:
 
 def create_calculator_agent():
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-    return create_agent(llm, [calc_tool, convert_tool], system_prompt=CALCULATOR_AGENT_SYSTEM_PROMPT)
+    return create_agent(llm, [calc_tool, convert_tool], system_prompt=CALCULATOR_AGENT_SYSTEM_PROMPT, name="calculator")
+
+
+class WorkflowState(TypedDict):
+    messages: Annotated[list[AnyMessage], add_messages]
+
+
+def create_workflow():
+    """Create outer workflow graph that wraps the calculator agent as a subgraph."""
+    agent = create_calculator_agent()
+
+    def run_agent(state: WorkflowState) -> WorkflowState:
+        result = agent.invoke(
+            {"messages": state["messages"]},
+            config={"tags": ["agent:calculator"]},
+        )
+        return {"messages": result["messages"]}
+
+    workflow = StateGraph(WorkflowState)
+    workflow.add_node("calculator_agent", run_agent)
+    workflow.add_edge(START, "calculator_agent")
+    workflow.add_edge("calculator_agent", END)
+    return workflow.compile()
 
 
 def main(query: str = "Convert 100 km to mi"):
     logger.info(f"Calculator Agent - Query: {query}")
-    agent = create_calculator_agent()
-    result = agent.invoke({"messages": [("user", query)]})
+    workflow = create_workflow()
+    result = workflow.invoke(
+        {"messages": [HumanMessage(content=query)]},
+        config={"metadata": {"session.id": "session-collector-1"}},
+    )
     response = result["messages"][-1].content
     logger.info(f"Response: {response}")
     return response
